@@ -1,0 +1,116 @@
+version: '3.6'
+
+# run a 3-broker / 1-zookeeper cluster
+# kafka broker state is persisted to named volumes and broker ids are fixed
+# kafka brokers are reachable via ingress port mappings and in the stack network
+
+# configuration:
+# SWARM_HOST := hostname of the machine running the cluster
+# PORT_RANGE := prefix for the exposed ports (<PORT_RANGE>0xx)
+
+x-kafka-service: &kafka-srv
+  image: wurstmeister/kafka:2.12-2.3.0
+  networks:
+    - net
+  deploy:
+    placement:
+      constraints: [node.role == manager]
+    resources:
+      limits:
+        memory: 2024M
+        cpus: '0.25'
+      reservations:
+        memory: 512M
+
+x-kafka-environment: &kafka-env
+  KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PUBLIC:PLAINTEXT,SWARM:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: SWARM
+  KAFKA_LISTENERS: PUBLIC://:9090,SWARM://:9099
+  JMX_PORT: 1099
+  KAFKA_JMX_OPTS: '-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=${SWARM_HOST:-127.0.0.1} -Dcom.sun.management.jmxremote.rmi.port=1099'
+  KAFKA_LOG_DIRS: '/kafka/kafka-logs'
+  KAFKA_MESSAGE_MAX_BYTES: 3000000
+  KAFKA_REPLICA_FETCH_MAX_BYTES: 3000000
+
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.5.6
+    networks:
+      - net
+    ports:
+      - target: 2181
+        published: ${PORT_RANGE:-9}081
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - type: volume
+        source: zookeeper-data
+        target: /bitnami/zookeeper
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 256M
+
+  alpha:
+    <<: *kafka-srv
+    ports:
+      - target: 9090
+        published: ${PORT_RANGE:-9}091
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - type: volume
+        source: alpha-data
+        target: /kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: PUBLIC://${SWARM_HOST:-127.0.0.1}:${PORT_RANGE:-9}091,SWARM://alpha:9099
+      <<: *kafka-env
+  bravo:
+    <<: *kafka-srv
+    ports:
+      - target: 9090
+        published: ${PORT_RANGE:-9}092
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - type: volume
+        source: bravo-data
+        target: /kafka
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: PUBLIC://${SWARM_HOST:-127.0.0.1}:${PORT_RANGE:-9}092,SWARM://bravo:9099
+      <<: *kafka-env
+  charlie:
+    <<: *kafka-srv
+    ports:
+      - target: 9090
+        published: ${PORT_RANGE:-9}093
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - type: volume
+        source: charlie-data
+        target: /kafka
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: PUBLIC://${SWARM_HOST:-127.0.0.1}:${PORT_RANGE:-9}093,SWARM://charlie:9099
+      <<: *kafka-env
+
+networks:
+  net:  # allow access to the kafka network from other stacks/standalone containers
+    driver: overlay
+    attachable: true
+    external: false
+
+volumes:
+  # override to use volumes with default mount point
+  alpha-data:
+  bravo-data:
+  charlie-data:
+  zookeeper-data:

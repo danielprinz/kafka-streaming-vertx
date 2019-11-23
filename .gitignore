@@ -1,0 +1,23 @@
+# Eclipse
+.classpath
+.project
+.settings/
+.fbExcludeFilterFile
+.dbeaver-data-sources.xml
+
+# IntelliJ
+*.iml
+.idea/*
+!.idea/runConfigurations/
+
+# Mac
+.DS_Store
+
+# Maven
+target/
+**/.flattened-pom.xml
+
+# Misc
+.vertx
+.factorypath
+.directory

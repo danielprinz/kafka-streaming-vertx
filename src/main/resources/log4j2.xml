@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="INFO">
+  <!-- Don't forget to set system property
+  -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector
+  to make all loggers asynchronous. -->
+  <Appenders>
+    <Console name="console" target="SYSTEM_OUT">
+      <PatternLayout>
+        <charset>UTF-8</charset>
+        <alwaysWriteExceptions>false</alwaysWriteExceptions>
+        <pattern>%d{HH:mm:ss,SSS} [%level] [%logger{1.}] [%t] %encode{"%maxLength{%message}{7500}" %throwable}{CRLF}%n
+        </pattern>
+      </PatternLayout>
+    </Console>
+  </Appenders>
+
+  <Loggers>
+    <Root level="INFO">
+      <AppenderRef ref="console"/>
+    </Root>
+
+    <Logger name="com.danielprinz.kafka" level="DEBUG"/>
+
+    <Logger name="org.apache.kafka.clients" level="INFO"/>
+    <Logger name="org.apache.kafka.clients.consumer" level="INFO"/>
+    <Logger name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator" level="INFO"/>
+    <Logger name="org.apache.kafka.common" level="INFO"/>
+  </Loggers>
+</Configuration>
