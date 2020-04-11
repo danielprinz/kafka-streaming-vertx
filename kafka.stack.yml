@@ -9,7 +9,7 @@ version: '3.6'
 # PORT_RANGE := prefix for the exposed ports (<PORT_RANGE>0xx)
 
 x-kafka-service: &kafka-srv
-  image: wurstmeister/kafka:2.12-2.3.0
+  image: wurstmeister/kafka:2.12-2.4.1
   networks:
     - net
   deploy:
@@ -35,7 +35,7 @@ x-kafka-environment: &kafka-env
 
 services:
   zookeeper:
-    image: bitnami/zookeeper:3.5.6
+    image: bitnami/zookeeper:3.5.7
     networks:
       - net
     ports:

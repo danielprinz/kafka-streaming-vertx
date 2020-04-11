@@ -21,22 +21,34 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.kafka.client.producer.KafkaProducer;
 import io.vertx.kafka.client.producer.KafkaProducerRecord;
 import io.vertx.kafka.client.serialization.JsonObjectSerializer;
+import lombok.Builder;
+import lombok.Value;
 
 public class RandomInputProducer extends AbstractVerticle {
 
   private final static Logger LOG = LogManager.getLogger(Entrypoint.class);
   private static final Random r = new Random();
 
-  private static final int BATCH_SIZE = 100;
-  private static final long BACKOFF_TIME_MS = 100;
-  private static final String BOOTSTRAP_SERVERS = "127.0.0.1:9091";
+  private final AtomicInteger producedRecords = new AtomicInteger();
+  private final Settings settings;
+  private long timerId = 0;
+
+  public RandomInputProducer(Settings settings) {
+    this.settings = settings;
+  }
 
   /**
    * Run with: -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector
    */
   public static void main(String[] args) {
     final Vertx vertx = Vertx.vertx(new VertxOptions().setEventLoopPoolSize(1).setWorkerPoolSize(1));
-    vertx.deployVerticle(new RandomInputProducer());
+    final Settings settings = Settings.builder()
+      .bootstrapServers("127.0.0.1:9091")
+      .backoffTimeMs(100)
+      .batchSize(100)
+      .maxRecordsToProduce(Integer.MAX_VALUE)
+      .build();
+    vertx.deployVerticle(new RandomInputProducer(settings));
   }
 
   @Override
@@ -45,17 +57,22 @@ public class RandomInputProducer extends AbstractVerticle {
     vertx.getOrCreateContext().addCloseHook(producer::close);
     producer.exceptionHandler(LOG::error);
 
-    vertx.setPeriodic(BACKOFF_TIME_MS, ignored -> {
+    timerId = vertx.setPeriodic(settings.getBackoffTimeMs(), ignored -> {
       final AtomicInteger count = new AtomicInteger();
       final long ref = System.currentTimeMillis();
-      for (long l = 0; l <= BATCH_SIZE; l++) {
+      for (long l = 0; l <= settings.getBatchSize(); l++) {
+        final int currentProduced = producedRecords.getAndIncrement();
+        if (currentProduced >= settings.getMaxRecordsToProduce()) {
+          // Stopped producing...
+          LOG.trace("Stopped producing records as max record size is reached.");
+        }
         final ZonedDateTime now = ZonedDateTime.now(UTC);
         final KafkaProducerRecord<Void, JsonObject> toProduce = KafkaProducerRecord.create(Entrypoint.INPUT_TOPIC,
-          JsonObject.mapFrom(new NumberEvent(now.getNano(), now.toEpochSecond(), generateRandomData())));
+          JsonObject.mapFrom(new NumberEvent(l, now.toEpochSecond(), generateRandomData())));
         producer.send(toProduce, ar -> {
           LOG.trace("Produced Offset {} in {} ms", ar.result().getOffset(), time(ar.result().getTimestamp()));
-          if (BATCH_SIZE == count.getAndIncrement()) {
-            LOG.info("Produced batch in {} ms", time(ref));
+          if (settings.getBatchSize() == count.getAndIncrement()) {
+            LOG.info("Produced batch in {} ms. Records produced {}.", time(ref), currentProduced);
           }
         });
       }
@@ -74,13 +91,22 @@ public class RandomInputProducer extends AbstractVerticle {
 
   private HashMap<String, String> producerOptions() {
     final HashMap<String, String> options = new HashMap<>();
-    options.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
+    options.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, settings.getBootstrapServers());
     options.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
     options.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonObjectSerializer.class.getName());
     options.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
     options.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5"); // max supported
     options.put(ProducerConfig.ACKS_CONFIG, "all");
     return options;
+  }
+
+  @Builder
+  @Value
+  static class Settings {
+    String bootstrapServers;
+    int batchSize;
+    long backoffTimeMs;
+    int maxRecordsToProduce;
   }
 
 }
