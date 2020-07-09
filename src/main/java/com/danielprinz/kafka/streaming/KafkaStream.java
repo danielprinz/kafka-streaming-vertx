@@ -3,6 +3,7 @@ package com.danielprinz.kafka.streaming;
 import static com.danielprinz.kafka.streaming.Entrypoint.*;
 import static java.time.ZoneOffset.UTC;
 
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.kafka.client.consumer.KafkaConsumer;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecords;
@@ -61,13 +63,13 @@ public class KafkaStream extends AbstractVerticle {
   private void initConsumer() {
     final HashMap<String, String> options = consumerOptions();
     this.consumer = KafkaConsumer.create(vertx, options);
-    this.vertx.getOrCreateContext().addCloseHook(consumer::close);
+    ((ContextInternal) this.vertx.getOrCreateContext()).addCloseHook(consumer::close);
     this.consumer.exceptionHandler(System.err::println);
   }
 
   private void initProducer() {
     this.producer = KafkaProducer.create(vertx, producerOptions());
-    this.vertx.getOrCreateContext().addCloseHook(producer::close);
+    ((ContextInternal) this.vertx.getOrCreateContext()).addCloseHook(producer::close);
     this.producer.exceptionHandler(System.err::println);
     this.producer.unwrap().initTransactions();
   }
@@ -130,7 +132,7 @@ public class KafkaStream extends AbstractVerticle {
 
   private void requestBatch() {
     timing = now();
-    consumer.poll(5000, records -> {
+    consumer.poll(Duration.ofSeconds(5), records -> {
       LOG.trace("{} ms for fetching records ", ChronoUnit.MILLIS.between(timing, now()));
       onBatch(records.result());
     });
