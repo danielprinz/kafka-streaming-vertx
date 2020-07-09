@@ -17,6 +17,7 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.kafka.client.producer.KafkaProducer;
 import io.vertx.kafka.client.producer.KafkaProducerRecord;
@@ -54,7 +55,7 @@ public class RandomInputProducer extends AbstractVerticle {
   @Override
   public void start(final Promise<Void> startPromise) {
     final KafkaProducer<Void, JsonObject> producer = KafkaProducer.create(vertx, producerOptions());
-    vertx.getOrCreateContext().addCloseHook(producer::close);
+    ((ContextInternal) vertx.getOrCreateContext()).addCloseHook(producer::close);
     producer.exceptionHandler(LOG::error);
 
     timerId = vertx.setPeriodic(settings.getBackoffTimeMs(), ignored -> {
